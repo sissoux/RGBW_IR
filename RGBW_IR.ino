@@ -9,7 +9,9 @@ elapsedMillis RefreshOutputTimer = 0;
 elapsedMillis IRRepeatTimeout = 0;
 #define IR_REPEAT_TIMEOUT 200
 elapsedMillis TempMeasTimer = 0;
-#define TEMP_MEAS_RATE 3000
+#define TEMP_MEAS_RATE 60000
+#define TEMP_DERATE_THRESHOLD 200
+#define OVERTEMP_THRESHOLD 138
 elapsedMillis AutoTimer = 0;
 uint16_t AutoDelay = 500;
 
@@ -26,17 +28,6 @@ bool HiSpeed = false;
 
 DynamicJsonBuffer jsonBuffer;
 char input[100];
-
-uint16_t Temp_Lookup[118][2] = {{1024, 8}, {1009, 9}, {995, 10}, {981, 11}, {966, 12}, {951, 13}, {937, 14}, {922, 15}, {907, 16}, {892, 17}, {878, 18}, {863, 19}, {848, 20}, {833, 21}, {819, 22}, {804, 23}, {790, 24}, {775, 25}, {760, 26}, {746, 27}, {732, 28}, {718, 29}, {704, 30}, {690, 31}, {676, 32}, {662, 33}, {649, 34}, {636, 35}, {622, 36}, {609, 37}, {596, 38}, {584, 39}, {571, 40}, {559, 41}, {547, 42}, {534, 43}, {523, 44}, {511, 45}, {499, 46}, {488, 47}, {477, 48}, {466, 49}, {455, 50}, {445, 51}, {435, 52}, {424, 53}, {414, 54}, {405, 55}, {395, 56}, {386, 57}, {377, 58}, {368, 59}, {359, 60}, {351, 61}, {342, 62}, {334, 63}, {326, 64}, {318, 65}, {311, 66}, {304, 67}, {296, 68}, {289, 69}, {282, 70}, {276, 71}, {269, 72}, {263, 73}, {256, 74}, {250, 75}, {244, 76}, {238, 77}, {233, 78}, {227, 79}, {222, 80}, {216, 81}, {211, 82}, {206, 83}, {201, 84}, {197, 85}, {192, 86}, {187, 87}, {183, 88}, {179, 89}, {174, 90}, {170, 91}, {166, 92}, {162, 93}, {159, 94}, {155, 95}, {151, 96}, {148, 97}, {144, 98}, {141, 99}, {138, 100}, {134, 101}, {131, 102}, {128, 103}, {125, 104}, {122, 105}, {120, 106}, {117, 107}, {114, 108}, {112, 109}, {109, 110}, {107, 111}, {104, 112}, {102, 113}, {100, 114}, {98, 115}, {95, 116}, {93, 117}, {91, 118}, {89, 119}, {87, 120}, {85, 121}, {83, 122}, {82, 123}, {80, 124}, {78, 125}};
-#define NB_OF_VALUE 118
-
-uint8_t getTemp(uint16_t val)
-{
-  for (int i = 0; i < NB_OF_VALUE; i++)
-  {
-    if (val <= Temp_Lookup[i][0] && val > Temp_Lookup[i + 1][0]) return Temp_Lookup[i][1];
-  }
-}
 
 
 void setup()
@@ -62,34 +53,43 @@ void taskManager()
     RefreshOutputTimer = 0;
     Lamp.refreshState();
   }
-  
+
   if (TempMeasTimer >= TEMP_MEAS_RATE)
   {
     TempMeasTimer = 0;
     uint16_t val = analogRead(A0);
-    Serial.print("ADC Value: ");
-    Serial.print(val);
-    Serial.print(", Temp: ");
-    Serial.println(getTemp(val));
+    if ( val <= (OVERTEMP_THRESHOLD + Lamp.overTemp * 50) ) //Check if we are overtemp with hysteresis
+    {
+      Lamp.overTemp = 1;
+    }
+    else if ( val <= TEMP_DERATE_THRESHOLD)
+    {
+      Lamp.overTemp = 0;
+      Lamp.decreaseBrightness();
+    }
+    else
+    {
+      Lamp.overTemp = 0;
+    }
   }
-  
-  if (AutoTimer >= AutoDelay &&(AutoFade || AutoJump))
+
+  if (AutoTimer >= AutoDelay && (AutoFade || AutoJump))
   {
     AutoTimer = 0;
-      if (HiSpeed)
-      {
-        AutoDelay = random(MIN_HISPEED_DELAY, MAX_HISPEED_DELAY);
-      }
-      else
-      {
-        AutoDelay = random(MIN_LOSPEED_DELAY, MAX_LOSPEED_DELAY);
-      }
-      double NewHue = (double)(random(0, 36000) / 100.0);
-      double NewSat = (double)(random(10, 1000) / 1000.0);
-      double NewVal = (double)(random(10, 1000) / 1000.0);
+    if (HiSpeed)
+    {
+      AutoDelay = random(MIN_HISPEED_DELAY, MAX_HISPEED_DELAY);
+    }
+    else
+    {
+      AutoDelay = random(MIN_LOSPEED_DELAY, MAX_LOSPEED_DELAY);
+    }
+    double NewHue = (double)(random(0, 36000) / 100.0);
+    double NewSat = (double)(random(10, 1000) / 1000.0);
+    double NewVal = (double)(random(10, 1000) / 1000.0);
 
-      if (AutoFade) Lamp.fade(NewHue, NewSat, NewVal, (AutoDelay) / (random(2, 3)));
-      else if (AutoJump) Lamp.setColor(NewHue, NewSat, NewVal);
+    if (AutoFade) Lamp.fade(NewHue, NewSat, NewVal, (AutoDelay) / (random(2, 3)));
+    else if (AutoJump) Lamp.setColor(NewHue, NewSat, NewVal);
   }
 }
 
@@ -209,7 +209,7 @@ void IR_Management()
         HiSpeed = false;
         LastIRCmd = NO_CMD;
         break;
-        
+
       case Pwr:
         Lamp.toogle();
         AutoFade = false;
@@ -219,5 +219,4 @@ void IR_Management()
     }
   }
 }
-
 
