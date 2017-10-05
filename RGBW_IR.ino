@@ -61,19 +61,8 @@ void taskManager()
   {
     RefreshOutputTimer = 0;
     Lamp.refreshState();
-    /*if (StripCommander.RunningFX)  //Update output only if necessary, RefreshOutputTimer is reset only if frame is displayed ==> As soon as one frame il
-      {
-      StripCommander.StateChanged = false;
-      FastLED.show();
-      }
-      else if (!LastFrameShowed)  //Show one more frame after RunningFX has been reset to be sure last effect iteration has been showed.
-      {
-      LastFrameShowed = true;
-      FastLED.show();
-      }
-      StripCommander.dynamicStateUpdate();*/
-
   }
+  
   if (TempMeasTimer >= TEMP_MEAS_RATE)
   {
     TempMeasTimer = 0;
@@ -83,11 +72,10 @@ void taskManager()
     Serial.print(", Temp: ");
     Serial.println(getTemp(val));
   }
-  if (AutoTimer >= AutoDelay)
+  
+  if (AutoTimer >= AutoDelay &&(AutoFade || AutoJump))
   {
     AutoTimer = 0;
-    if (AutoFade || AutoJump)
-    {
       if (HiSpeed)
       {
         AutoDelay = random(MIN_HISPEED_DELAY, MAX_HISPEED_DELAY);
@@ -102,7 +90,6 @@ void taskManager()
 
       if (AutoFade) Lamp.fade(NewHue, NewSat, NewVal, (AutoDelay) / (random(2, 3)));
       else if (AutoJump) Lamp.setColor(NewHue, NewSat, NewVal);
-    }
   }
 }
 
@@ -166,7 +153,7 @@ void IR_Management()
     }
   }
 
-  if ( CurrentCommand < Rp)
+  if ( CurrentCommand < Rp)   //First commands in the list are for static colors
   {
     Lamp.setColor(StaticColorHue[CurrentCommand], StaticColorSat[CurrentCommand], 1);
     LastIRCmd = NO_CMD;
@@ -189,43 +176,36 @@ void IR_Management()
         LastIRCmd = im;
         break;
       case Auto:
-        AutoTimer = 30000;
         AutoFade = true;
         AutoJump = false;
         LastIRCmd = NO_CMD;
         break;
       case Fadea:
-        AutoTimer = 30000;
         AutoFade = true;
         AutoJump = false;
         LastIRCmd = NO_CMD;
         break;
       case Jumpa:
-        AutoTimer = 30000;
         AutoFade = false;
         AutoJump = true;
         LastIRCmd = NO_CMD;
         break;
       case Fadeb:
-        AutoTimer = 30000;
         AutoFade = true;
         AutoJump = false;
         LastIRCmd = NO_CMD;
         break;
       case Jumpb:
-        AutoTimer = 30000;
         AutoFade = false;
         AutoJump = true;
         LastIRCmd = NO_CMD;
         break;
 
       case Spdp:
-        AutoTimer = 30000;
         HiSpeed = true;
         LastIRCmd = NO_CMD;
         break;
       case Spdm:
-        AutoTimer = 30000;
         HiSpeed = false;
         LastIRCmd = NO_CMD;
         break;
